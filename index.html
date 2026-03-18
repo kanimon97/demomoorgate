@@ -5,7 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Moorgate Finance — AI SDR Console</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
-<script src="https://cdn.jsdelivr.net/npm/@vapi-ai/web/dist/vapi.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@vapi-ai/web@latest/dist/vapi.umd.js"></script>
+<script>
+window.addEventListener('load', function() {
+  if (!window.Vapi) {
+    var s = document.createElement('script');
+    s.src = 'https://unpkg.com/@vapi-ai/web@latest/dist/vapi.umd.js';
+    document.head.appendChild(s);
+  }
+});
+</script>
 <style>
   :root {
     --bg: #0c0e0f;
@@ -1939,7 +1948,12 @@ function getVapi() {
     return null;
   }
   try {
-    vapiInstance = new window.Vapi(pubKey);
+    const VapiConstructor = window.Vapi || (window.VapiSDK && window.VapiSDK.default) || (window['@vapi-ai/web'] && window['@vapi-ai/web'].default);
+    if (!VapiConstructor) {
+      toast('Vapi SDK not loaded yet — please wait a moment and try again', 'error');
+      return null;
+    }
+    vapiInstance = new VapiConstructor(pubKey);
 
     vapiInstance.on('call-start', () => {
       setDemoActive(true);
