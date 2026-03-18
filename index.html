@@ -1,0 +1,2100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Moorgate Finance — AI SDR Console</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/@vapi-ai/web/dist/vapi.umd.js"></script>
+<style>
+  :root {
+    --bg: #0c0e0f;
+    --surface: #131618;
+    --surface2: #1a1e21;
+    --border: #252a2e;
+    --border2: #2e3439;
+    --gold: #c9a96e;
+    --gold-dim: #8a6f44;
+    --green: #4caf7d;
+    --green-dim: #2a5c41;
+    --red: #e05c5c;
+    --red-dim: #5c2a2a;
+    --blue: #5b9cf6;
+    --amber: #f0a04b;
+    --text: #e8e4dd;
+    --text-muted: #7a8088;
+    --text-dim: #4a5058;
+    --radius: 6px;
+    --radius-lg: 12px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grain overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.4;
+  }
+
+  /* SIDEBAR */
+  .sidebar {
+    position: fixed;
+    left: 0; top: 0; bottom: 0;
+    width: 220px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    z-index: 100;
+  }
+
+  .sidebar-logo {
+    padding: 28px 24px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-logo .wordmark {
+    font-family: 'Playfair Display', serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--gold);
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+  }
+
+  .sidebar-logo .sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-top: 3px;
+  }
+
+  .sidebar-status {
+    margin: 16px 16px 0;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  .status-dot.live { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+  .status-dot.error { background: var(--red); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .nav {
+    padding: 20px 12px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .nav-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    padding: 8px 8px 4px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 400;
+    transition: all 0.15s;
+    border: 1px solid transparent;
+    user-select: none;
+  }
+
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active {
+    background: rgba(201, 169, 110, 0.08);
+    border-color: rgba(201, 169, 110, 0.2);
+    color: var(--gold);
+  }
+
+  .nav-icon { font-size: 15px; width: 18px; text-align: center; }
+
+  .sidebar-footer {
+    padding: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  .sidebar-footer .version {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+  }
+
+  /* MAIN */
+  .main {
+    margin-left: 220px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .topbar {
+    height: 56px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 28px;
+    gap: 16px;
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+
+  .topbar-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+    color: var(--text);
+    flex: 1;
+  }
+
+  .topbar-actions { display: flex; gap: 8px; align-items: center; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border2);
+    background: var(--surface2);
+    color: var(--text-muted);
+    transition: all 0.15s;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .btn:hover { border-color: var(--border2); color: var(--text); background: #21272c; }
+
+  .btn-gold {
+    background: var(--gold);
+    border-color: var(--gold);
+    color: #0c0e0f;
+    font-weight: 600;
+  }
+  .btn-gold:hover { background: #dbb97e; border-color: #dbb97e; color: #0c0e0f; }
+
+  .btn-green {
+    background: rgba(76, 175, 125, 0.12);
+    border-color: rgba(76, 175, 125, 0.3);
+    color: var(--green);
+  }
+  .btn-green:hover { background: rgba(76, 175, 125, 0.2); }
+
+  .btn-red {
+    background: rgba(224, 92, 92, 0.1);
+    border-color: rgba(224, 92, 92, 0.25);
+    color: var(--red);
+  }
+
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* PAGE */
+  .page { display: none; padding: 28px; flex-direction: column; gap: 24px; }
+  .page.active { display: flex; }
+
+  /* CARDS */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .card-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 14px;
+    color: var(--text);
+    flex: 1;
+  }
+
+  .card-body { padding: 20px; }
+
+  /* STATS GRID */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent-color, var(--border));
+  }
+
+  .stat-card.gold { --accent-color: var(--gold); }
+  .stat-card.green { --accent-color: var(--green); }
+  .stat-card.blue { --accent-color: var(--blue); }
+  .stat-card.amber { --accent-color: var(--amber); }
+
+  .stat-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+
+  .stat-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .stat-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 6px;
+  }
+
+  /* TABLE */
+  .table-wrap { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead th {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    padding: 10px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    white-space: nowrap;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+  tbody td {
+    padding: 11px 16px;
+    font-size: 13px;
+    color: var(--text);
+    vertical-align: middle;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+  }
+
+  .badge-green { background: rgba(76,175,125,0.12); color: var(--green); border: 1px solid rgba(76,175,125,0.2); }
+  .badge-gold { background: rgba(201,169,110,0.12); color: var(--gold); border: 1px solid rgba(201,169,110,0.2); }
+  .badge-red { background: rgba(224,92,92,0.1); color: var(--red); border: 1px solid rgba(224,92,92,0.2); }
+  .badge-blue { background: rgba(91,156,246,0.1); color: var(--blue); border: 1px solid rgba(91,156,246,0.2); }
+  .badge-dim { background: rgba(255,255,255,0.04); color: var(--text-muted); border: 1px solid var(--border); }
+  .badge-amber { background: rgba(240,160,75,0.1); color: var(--amber); border: 1px solid rgba(240,160,75,0.2); }
+
+  /* FORM ELEMENTS */
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+
+  .form-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  input[type=text], input[type=tel], input[type=email], select, textarea {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 9px 12px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  input[type=text]:focus, input[type=tel]:focus, input[type=email]:focus, select:focus, textarea:focus {
+    border-color: var(--gold-dim);
+  }
+
+  textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
+
+  select option { background: var(--surface2); }
+
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+  /* CAMPAIGN PANEL */
+  .campaign-hero {
+    background: linear-gradient(135deg, rgba(201,169,110,0.06) 0%, transparent 60%);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 32px;
+    display: flex;
+    align-items: center;
+    gap: 32px;
+  }
+
+  .campaign-hero-text { flex: 1; }
+  .campaign-hero-text h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  .campaign-hero-text p { color: var(--text-muted); line-height: 1.6; font-size: 13px; }
+
+  .campaign-hero-action { display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
+
+  .big-btn {
+    padding: 14px 28px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+    font-family: 'DM Sans', sans-serif;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .big-btn-gold {
+    background: var(--gold);
+    color: #0c0e0f;
+  }
+  .big-btn-gold:hover { background: #dbb97e; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(201,169,110,0.25); }
+
+  .big-btn-red {
+    background: rgba(224,92,92,0.12);
+    color: var(--red);
+    border: 1px solid rgba(224,92,92,0.25);
+  }
+  .big-btn-red:hover { background: rgba(224,92,92,0.2); }
+
+  /* LIVE CALL FEED */
+  .feed { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
+
+  .feed-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--surface2);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    animation: fadeIn 0.3s ease;
+  }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+  .feed-icon { font-size: 16px; margin-top: 1px; }
+
+  .feed-body { flex: 1; }
+  .feed-name { font-size: 13px; font-weight: 500; color: var(--text); }
+  .feed-detail { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .feed-time { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); white-space: nowrap; }
+
+  /* SETTINGS */
+  .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+  .setting-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+
+  .setting-key {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+
+  .setting-input-wrap { position: relative; }
+  .setting-input-wrap input {
+    padding-right: 36px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+  }
+  .setting-eye {
+    position: absolute;
+    right: 10px; top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    color: var(--text-dim);
+    font-size: 14px;
+    background: none;
+    border: none;
+    padding: 0;
+  }
+
+  /* PROMPT EDITOR */
+  .prompt-wrap { position: relative; }
+  .prompt-wrap textarea {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    min-height: 400px;
+    line-height: 1.7;
+    letter-spacing: 0.01em;
+  }
+
+  .char-count {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    text-align: right;
+    margin-top: 4px;
+  }
+
+  /* TABS */
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); padding: 0 20px; }
+  .tab {
+    padding: 12px 16px;
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+  .tab:hover:not(.active) { color: var(--text); }
+
+  /* MODAL */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    z-index: 200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    width: 520px;
+    max-width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .modal-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .modal-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 15px;
+    flex: 1;
+  }
+
+  .modal-close {
+    background: none; border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 18px;
+    padding: 0;
+    line-height: 1;
+  }
+  .modal-close:hover { color: var(--text); }
+
+  .modal-body { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+  .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
+
+  /* TOAST */
+  .toast-container {
+    position: fixed;
+    bottom: 20px; right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 500;
+  }
+
+  .toast {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 240px;
+    animation: slideIn 0.2s ease;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .toast.success { border-left: 3px solid var(--green); }
+  .toast.error { border-left: 3px solid var(--red); }
+  .toast.info { border-left: 3px solid var(--gold); }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  /* EMPTY STATE */
+  .empty {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text-muted);
+  }
+  .empty-icon { font-size: 32px; margin-bottom: 12px; opacity: 0.4; }
+  .empty-text { font-size: 13px; }
+
+  /* DIVIDER */
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+  }
+
+  .gap-12 { gap: 12px; }
+
+  /* METRICS BAR */
+  .metric-bar {
+    height: 6px;
+    background: var(--surface2);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+  .metric-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s ease;
+    background: var(--gold);
+  }
+  .metric-bar-fill.green { background: var(--green); }
+  .metric-bar-fill.blue { background: var(--blue); }
+
+  .inline-flex { display: inline-flex; align-items: center; gap: 6px; }
+  .flex { display: flex; }
+  .items-center { align-items: center; }
+  .justify-between { justify-content: space-between; }
+  .gap-8 { gap: 8px; }
+  .mt-4 { margin-top: 4px; }
+  .text-muted { color: var(--text-muted); }
+  .text-sm { font-size: 12px; }
+  .font-mono { font-family: 'DM Mono', monospace; }
+
+  .progress-ring {
+    transform: rotate(-90deg);
+  }
+
+  /* DEMO / WEB CALL */
+  .demo-panel {
+    background: linear-gradient(135deg, rgba(76,175,125,0.06) 0%, transparent 60%);
+    border: 1px solid rgba(76,175,125,0.2);
+    border-radius: var(--radius-lg);
+    padding: 28px 32px;
+    display: flex;
+    align-items: center;
+    gap: 32px;
+  }
+
+  .demo-orb-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .demo-orb {
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    background: rgba(76,175,125,0.1);
+    border: 2px solid rgba(76,175,125,0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+
+  .demo-orb:hover { background: rgba(76,175,125,0.18); transform: scale(1.04); }
+
+  .demo-orb.active {
+    background: rgba(76,175,125,0.2);
+    border-color: var(--green);
+    box-shadow: 0 0 0 8px rgba(76,175,125,0.08), 0 0 0 16px rgba(76,175,125,0.04);
+    animation: orbPulse 2s infinite;
+  }
+
+  .demo-orb.active::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    border: 1px solid rgba(76,175,125,0.3);
+    animation: orbRing 2s infinite;
+  }
+
+  @keyframes orbPulse {
+    0%,100% { box-shadow: 0 0 0 8px rgba(76,175,125,0.08), 0 0 0 16px rgba(76,175,125,0.04); }
+    50% { box-shadow: 0 0 0 12px rgba(76,175,125,0.12), 0 0 0 24px rgba(76,175,125,0.06); }
+  }
+
+  @keyframes orbRing {
+    0% { transform: scale(1); opacity: 1; }
+    100% { transform: scale(1.4); opacity: 0; }
+  }
+
+  .demo-status-text {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    text-align: center;
+  }
+
+  .demo-status-text.active { color: var(--green); }
+
+  .demo-body { flex: 1; }
+
+  .demo-body h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 17px;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .demo-body p {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    margin-bottom: 14px;
+  }
+
+  .demo-transcript {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+    min-height: 52px;
+    max-height: 100px;
+    overflow-y: auto;
+    font-family: 'DM Mono', monospace;
+    line-height: 1.6;
+    letter-spacing: 0.01em;
+  }
+
+  .vol-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 20px;
+  }
+
+  .vol-bar {
+    width: 3px;
+    background: var(--green);
+    border-radius: 2px;
+    transition: height 0.1s;
+    min-height: 3px;
+  }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="wordmark">Moorgate Finance</div>
+    <div class="sub">AI SDR Console</div>
+  </div>
+
+  <div class="sidebar-status" id="connectionStatus">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText">Not configured</span>
+  </div>
+
+  <nav class="nav">
+    <div class="nav-label">Operations</div>
+    <div class="nav-item active" onclick="showPage('campaign')" id="nav-campaign">
+      <span class="nav-icon">📡</span> Campaign
+    </div>
+    <div class="nav-item" onclick="showPage('leads')" id="nav-leads">
+      <span class="nav-icon">👥</span> Leads
+    </div>
+    <div class="nav-item" onclick="showPage('outcomes')" id="nav-outcomes">
+      <span class="nav-icon">📊</span> Outcomes
+    </div>
+    <div class="nav-item" onclick="showPage('demo')" id="nav-demo">
+      <span class="nav-icon">🎙</span> Demo
+    </div>
+
+    <div class="divider" style="margin: 10px 8px;"></div>
+
+    <div class="nav-label">Configuration</div>
+    <div class="nav-item" onclick="showPage('prompt')" id="nav-prompt">
+      <span class="nav-icon">✏️</span> Prompt
+    </div>
+    <div class="nav-item" onclick="showPage('settings')" id="nav-settings">
+      <span class="nav-icon">⚙️</span> Settings
+    </div>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="version">v1.0.0 · Snapdrum</div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="topbar-title" id="pageTitle">Campaign</div>
+    <div class="topbar-actions">
+      <button class="btn" onclick="refreshData()">↻ Refresh</button>
+      <button class="btn btn-gold" onclick="openModal('addLeadModal')">+ Add Lead</button>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════ PAGE: CAMPAIGN -->
+  <div class="page active" id="page-campaign">
+
+    <div class="stats-grid">
+      <div class="stat-card gold">
+        <div class="stat-label">Total Leads</div>
+        <div class="stat-value" id="stat-total">—</div>
+        <div class="stat-sub">in lead sheet</div>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-label">Transferred</div>
+        <div class="stat-value" id="stat-transferred">—</div>
+        <div class="stat-sub">to account managers</div>
+      </div>
+      <div class="stat-card blue">
+        <div class="stat-label">Callbacks</div>
+        <div class="stat-value" id="stat-callbacks">—</div>
+        <div class="stat-sub">booked</div>
+      </div>
+      <div class="stat-card amber">
+        <div class="stat-label">Transfer Rate</div>
+        <div class="stat-value" id="stat-rate">—</div>
+        <div class="stat-sub">of qualified calls</div>
+      </div>
+    </div>
+
+    <div class="campaign-hero">
+      <div class="campaign-hero-text">
+        <h2>Outbound Campaign</h2>
+        <p>Trigger the AI SDR to call all new leads from your Google Sheet. The agent will qualify each lead and transfer hot prospects directly to your account managers.</p>
+        <div style="margin-top: 14px; display: flex; gap: 16px;">
+          <div>
+            <div style="font-family:'DM Mono',monospace; font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.1em; margin-bottom:4px;">Pending Leads</div>
+            <div style="font-size:20px; font-family:'Playfair Display',serif; color:var(--text)" id="pendingCount">—</div>
+          </div>
+          <div>
+            <div style="font-family:'DM Mono',monospace; font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.1em; margin-bottom:4px;">Called Today</div>
+            <div style="font-size:20px; font-family:'Playfair Display',serif; color:var(--text)" id="calledToday">—</div>
+          </div>
+          <div>
+            <div style="font-family:'DM Mono',monospace; font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.1em; margin-bottom:4px;">Avg Duration</div>
+            <div style="font-size:20px; font-family:'Playfair Display',serif; color:var(--text)" id="avgDuration">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="campaign-hero-action">
+        <button class="big-btn big-btn-gold" id="startBtn" onclick="startCampaign()">
+          ▶ Start Calling
+        </button>
+        <button class="btn btn-red" onclick="stopCampaign()" id="stopBtn" style="display:none">
+          ⏹ Stop Campaign
+        </button>
+        <div style="font-size:11px; color:var(--text-dim); text-align:right; max-width:160px; line-height:1.5" id="campaignStatusMsg">
+          Ready to launch
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Live Call Feed</div>
+        <button class="btn" onclick="clearFeed()" style="font-size:11px; padding:4px 10px">Clear</button>
+      </div>
+      <div style="padding: 16px;">
+        <div class="feed" id="liveFeed">
+          <div class="empty">
+            <div class="empty-icon">📞</div>
+            <div class="empty-text">No calls yet. Start a campaign to see live activity.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════ PAGE: DEMO -->
+  <div class="page" id="page-demo">
+
+    <div class="demo-panel">
+      <div class="demo-orb-wrap">
+        <div class="demo-orb" id="demoOrb" onclick="toggleWebCall()">🎙</div>
+        <div class="demo-status-text" id="demoOrbLabel">Click to start</div>
+      </div>
+      <div class="demo-body">
+        <h3>Talk to the Agent</h3>
+        <p>Test the AI SDR live in your browser — no phone number needed. Click the microphone, allow mic access, and speak as if you were a lead. The agent will qualify you in real time.</p>
+        <div id="demoTranscript" class="demo-transcript">Waiting to connect...</div>
+        <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
+          <div class="vol-bars" id="volBars">
+            <div class="vol-bar" style="height:4px"></div>
+            <div class="vol-bar" style="height:8px"></div>
+            <div class="vol-bar" style="height:4px"></div>
+            <div class="vol-bar" style="height:12px"></div>
+            <div class="vol-bar" style="height:4px"></div>
+            <div class="vol-bar" style="height:6px"></div>
+            <div class="vol-bar" style="height:4px"></div>
+          </div>
+          <span id="demoCallTimer" style="font-family:'DM Mono',monospace; font-size:11px; color:var(--text-dim);">00:00</span>
+          <span style="flex:1"></span>
+          <button class="btn btn-red" id="demoEndBtn" onclick="endWebCall()" style="display:none;">⏹ End Call</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">How to use this demo</div>
+      </div>
+      <div style="padding:20px; display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px;">
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div style="font-family:'DM Mono',monospace; font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.1em;">Step 1</div>
+          <div style="font-size:13px; color:var(--text); font-weight:500;">Add your Public Key</div>
+          <div style="font-size:12px; color:var(--text-muted); line-height:1.6;">Go to Settings and fill in your Vapi Public Key. This is different from the API key — find it in Vapi dashboard under API Keys labelled "Public".</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div style="font-family:'DM Mono',monospace; font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.1em;">Step 2</div>
+          <div style="font-size:13px; color:var(--text); font-weight:500;">Click the microphone</div>
+          <div style="font-size:12px; color:var(--text-muted); line-height:1.6;">Click the green orb above. Your browser will ask for microphone permission — click Allow. The agent connects within a few seconds.</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div style="font-family:'DM Mono',monospace; font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.1em;">Step 3</div>
+          <div style="font-size:13px; color:var(--text); font-weight:500;">Speak naturally</div>
+          <div style="font-size:12px; color:var(--text-muted); line-height:1.6;">Respond as a lead would. Try saying you need asset finance, or that you're busy, or ask to speak to someone now. Test every scenario.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">Suggested test scenarios</div></div>
+      <div style="padding:20px; display:flex; flex-direction:column; gap:8px;">
+        <div onclick="setScenario('hot')" style="padding:12px 16px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); cursor:pointer; display:flex; align-items:center; gap:12px; transition:border-color 0.15s;" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
+          <span class="badge badge-green">Hot lead</span>
+          <span style="font-size:13px; color:var(--text-muted);">Say: "Yes I need asset finance for a new van, about £40,000, within the next two weeks"</span>
+        </div>
+        <div onclick="setScenario('warm')" style="padding:12px 16px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); cursor:pointer; display:flex; align-items:center; gap:12px;" onmouseover="this.style.borderColor='var(--amber)'" onmouseout="this.style.borderColor='var(--border)'">
+          <span class="badge badge-amber">Warm lead</span>
+          <span style="font-size:13px; color:var(--text-muted);">Say: "Maybe later in the year, we might need some working capital but nothing urgent right now"</span>
+        </div>
+        <div onclick="setScenario('busy')" style="padding:12px 16px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); cursor:pointer; display:flex; align-items:center; gap:12px;" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'">
+          <span class="badge badge-blue">Callback</span>
+          <span style="font-size:13px; color:var(--text-muted);">Say: "I'm in a meeting right now, can someone call me back Thursday afternoon?"</span>
+        </div>
+        <div onclick="setScenario('cold')" style="padding:12px 16px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); cursor:pointer; display:flex; align-items:center; gap:12px;" onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='var(--border)'">
+          <span class="badge badge-red">Not interested</span>
+          <span style="font-size:13px; color:var(--text-muted);">Say: "No thanks, we don't need any finance at the moment"</span>
+        </div>
+        <div onclick="setScenario('broker')" style="padding:12px 16px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); cursor:pointer; display:flex; align-items:center; gap:12px;" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
+          <span class="badge badge-gold">Has broker</span>
+          <span style="font-size:13px; color:var(--text-muted);">Say: "We already work with a broker actually"</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════ PAGE: LEADS -->
+  <div class="page" id="page-leads">
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Lead List</div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <select id="filterStatus" onchange="filterLeads()" style="width:160px; padding:6px 10px; font-size:12px;">
+            <option value="">All statuses</option>
+            <option value="new">New</option>
+            <option value="called">Called</option>
+            <option value="qualified_hot">Hot</option>
+            <option value="qualified_warm">Warm</option>
+            <option value="callback_booked">Callback</option>
+            <option value="transferred">Transferred</option>
+            <option value="not_interested">Not Interested</option>
+            <option value="do_not_call">Do Not Call</option>
+          </select>
+          <button class="btn" onclick="loadLeads()">↻ Sync</button>
+          <button class="btn btn-gold" onclick="openModal('addLeadModal')">+ Add Lead</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Business</th>
+              <th>Phone</th>
+              <th>Source</th>
+              <th>Status</th>
+              <th>Category</th>
+              <th>Notes</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="leadsTableBody">
+            <tr><td colspan="8"><div class="empty"><div class="empty-icon">👥</div><div class="empty-text">Configure your Google Sheets API in Settings to load leads.</div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════ PAGE: OUTCOMES -->
+  <div class="page" id="page-outcomes">
+
+    <div class="stats-grid">
+      <div class="stat-card green">
+        <div class="stat-label">Transfer Rate</div>
+        <div class="stat-value" id="o-transfer-rate">—</div>
+        <div class="metric-bar"><div class="metric-bar-fill green" id="bar-transfer" style="width:0%"></div></div>
+      </div>
+      <div class="stat-card gold">
+        <div class="stat-label">Qualified Rate</div>
+        <div class="stat-value" id="o-qualified-rate">—</div>
+        <div class="metric-bar"><div class="metric-bar-fill" id="bar-qualified" style="width:0%"></div></div>
+      </div>
+      <div class="stat-card blue">
+        <div class="stat-label">Avg Call Duration</div>
+        <div class="stat-value" id="o-avg-duration">—</div>
+        <div class="stat-sub">target: 60–240s</div>
+      </div>
+      <div class="stat-card amber">
+        <div class="stat-label">Missed Transfers</div>
+        <div class="stat-value" id="o-missed">—</div>
+        <div class="stat-sub">agent unavailable</div>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">Outcome Breakdown</div></div>
+        <div style="padding:20px; display:flex; flex-direction:column; gap:12px;" id="outcomeBreakdown">
+          <div class="empty"><div class="empty-text">No data yet.</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">Funding Categories</div></div>
+        <div style="padding:20px; display:flex; flex-direction:column; gap:12px;" id="categoryBreakdown">
+          <div class="empty"><div class="empty-text">No data yet.</div></div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">Recent Outcomes</div></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Lead</th>
+              <th>Business</th>
+              <th>Status</th>
+              <th>Category</th>
+              <th>Intent</th>
+              <th>Duration</th>
+              <th>Notes</th>
+              <th>Next Action</th>
+            </tr>
+          </thead>
+          <tbody id="outcomesTableBody">
+            <tr><td colspan="8"><div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Outcomes will appear here after calls complete.</div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════ PAGE: PROMPT -->
+  <div class="page" id="page-prompt">
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">System Prompt</div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn" onclick="loadPrompt()">↻ Load from Vapi</button>
+          <button class="btn btn-gold" onclick="savePrompt()">✓ Save to Vapi</button>
+        </div>
+      </div>
+      <div style="padding:20px;">
+        <div style="background:rgba(201,169,110,0.06); border:1px solid rgba(201,169,110,0.15); border-radius:var(--radius); padding:12px 16px; margin-bottom:16px; font-size:12px; color:var(--gold); line-height:1.6;">
+          ⚠️ Changes here update the live Vapi assistant immediately. Test after saving.
+        </div>
+        <div class="prompt-wrap">
+          <textarea id="promptEditor" placeholder="Paste your Vapi system prompt here, or click 'Load from Vapi' to fetch the current prompt..."></textarea>
+        </div>
+        <div class="char-count"><span id="charCount">0</span> characters</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════ PAGE: SETTINGS -->
+  <div class="page" id="page-settings">
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">API Configuration</div></div>
+      <div style="padding:20px; display:flex; flex-direction:column; gap:16px;">
+
+        <div style="background:rgba(91,156,246,0.06); border:1px solid rgba(91,156,246,0.15); border-radius:var(--radius); padding:12px 16px; font-size:12px; color:var(--blue); line-height:1.6;">
+          ℹ️ These keys are stored in your browser only. For production, move them to your backend environment variables.
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Vapi API Key</label>
+            <div class="setting-input-wrap">
+              <input type="password" id="vapiKey" placeholder="sk-..." />
+              <button class="setting-eye" onclick="toggleKey('vapiKey')">👁</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Vapi Assistant ID</label>
+            <input type="text" id="vapiAssistantId" placeholder="asst_..." />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Vapi Public Key (for browser demo)</label>
+            <input type="text" id="vapiPublicKey" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Make.com Webhook URL</label>
+            <input type="text" id="makeWebhookUrl" placeholder="https://hook.eu1.make.com/..." />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Google Sheet ID</label>
+            <input type="text" id="sheetId" placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Google Sheets API Key</label>
+            <div class="setting-input-wrap">
+              <input type="password" id="sheetsApiKey" placeholder="AIza..." />
+              <button class="setting-eye" onclick="toggleKey('sheetsApiKey')">👁</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Transfer Phone Number</label>
+            <input type="tel" id="transferNumber" placeholder="+44 7700 000000" />
+          </div>
+        </div>
+
+        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:8px;">
+          <button class="btn" onclick="testConnection()">Test Connection</button>
+          <button class="btn btn-gold" onclick="saveSettings()">Save Settings</button>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">Call Settings</div></div>
+      <div style="padding:20px;">
+        <div class="form-grid-3" style="gap:16px;">
+          <div class="form-group">
+            <label class="form-label">Calling Hours (Start)</label>
+            <input type="text" id="callStart" value="09:00" placeholder="09:00" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Calling Hours (End)</label>
+            <input type="text" id="callEnd" value="17:30" placeholder="17:30" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Max Calls Per Run</label>
+            <input type="text" id="maxCalls" value="50" placeholder="50" />
+          </div>
+        </div>
+        <div style="margin-top:16px; display:flex; justify-content:flex-end;">
+          <button class="btn btn-gold" onclick="saveCallSettings()">Save</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</main>
+
+<!-- ═══════════════════════════════════════ MODALS -->
+
+<!-- ADD LEAD MODAL -->
+<div class="modal-overlay" id="addLeadModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Add New Lead</div>
+      <button class="modal-close" onclick="closeModal('addLeadModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">First Name</label>
+          <input type="text" id="lead-first" placeholder="John" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Last Name</label>
+          <input type="text" id="lead-last" placeholder="Smith" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Business Name</label>
+          <input type="text" id="lead-business" placeholder="Smith Transport Ltd" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone Number *</label>
+          <input type="tel" id="lead-phone" placeholder="+44 7700 000000" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Source</label>
+          <select id="lead-source">
+            <option value="manual">Manual Entry</option>
+            <option value="web">Website</option>
+            <option value="referral">Referral</option>
+            <option value="broker">Broker</option>
+            <option value="cold_list">Cold List</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" id="lead-email" placeholder="john@smithtransport.co.uk" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <textarea id="lead-notes" style="min-height:80px;" placeholder="Any relevant context..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('addLeadModal')">Cancel</button>
+      <button class="btn btn-gold" onclick="addLead()">Add Lead</button>
+    </div>
+  </div>
+</div>
+
+<!-- VIEW LEAD MODAL -->
+<div class="modal-overlay" id="viewLeadModal">
+  <div class="modal" style="width:580px;">
+    <div class="modal-header">
+      <div class="modal-title" id="viewLeadTitle">Lead Details</div>
+      <button class="modal-close" onclick="closeModal('viewLeadModal')">✕</button>
+    </div>
+    <div class="modal-body" id="viewLeadBody">
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('viewLeadModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+let config = {};
+let leads = [];
+let outcomes = [];
+let campaignRunning = false;
+let feedItems = [];
+
+const DEFAULT_PROMPT = `You are Moorgate Finance's AI outbound calling assistant.
+
+Your job is to call leads, introduce yourself, qualify their funding need, and transfer hot prospects directly to a human account manager.
+
+CALL FLOW:
+1. Introduction: "Hi, it's Alex calling from Moorgate Finance. Do you have any finance needs coming up soon? Is now a good time for a quick chat?"
+2. Identify intent: "Can I ask what you're looking to fund?" (Vehicle / Equipment / Machinery / Cashflow / Invoice finance / Business loan)
+3. Light qualification (3–4 questions max):
+   - "Roughly how much funding are you looking for?"
+   - "What is the finance for?"
+   - "When are you hoping to have the funding in place?"
+   - "Is this for a limited company or sole trader?"
+4. If interest detected → transfer: "Perfect - it sounds like this is something we can help with. What I'll do is connect you with one of our account managers now."
+5. Before transfer, capture: name, business, funding amount, purpose, timeline.
+
+TARGET CALL DURATION: 60–240 seconds. Be brief and route quickly.
+
+BEHAVIOUR RULES:
+- Keep conversations short. Ask one question at a time.
+- Never give financial advice or discuss rates/approval.
+- If AM unavailable: offer callback or email follow-up.
+- Vulnerable customer signals → immediate transfer to human.
+- If "we already have a broker" → "Many businesses work with brokers. Have they already secured something? It might still be worth a quick chat with our team."
+- If not interested → "No problem at all, thank you for your time."
+- If asked to be removed → log as do_not_call.
+
+VOICE: Warm, British, conversational. Not robotic. Not pushy.`;
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  loadConfig();
+  updatePromptCharCount();
+  document.getElementById('promptEditor').addEventListener('input', updatePromptCharCount);
+});
+
+function loadConfig() {
+  const saved = localStorage.getItem('moorgate_config');
+  if (saved) {
+    config = JSON.parse(saved);
+    document.getElementById('vapiKey').value = config.vapiKey || '';
+    document.getElementById('vapiAssistantId').value = config.vapiAssistantId || '';
+    document.getElementById('vapiPublicKey').value = config.vapiPublicKey || '';
+    document.getElementById('makeWebhookUrl').value = config.makeWebhookUrl || '';
+    document.getElementById('sheetId').value = config.sheetId || '';
+    document.getElementById('sheetsApiKey').value = config.sheetsApiKey || '';
+    document.getElementById('transferNumber').value = config.transferNumber || '';
+    document.getElementById('callStart').value = config.callStart || '09:00';
+    document.getElementById('callEnd').value = config.callEnd || '17:30';
+    document.getElementById('maxCalls').value = config.maxCalls || '50';
+    if (config.prompt) document.getElementById('promptEditor').value = config.prompt;
+    else document.getElementById('promptEditor').value = DEFAULT_PROMPT;
+    updateConnectionStatus();
+    loadLeads();
+  } else {
+    document.getElementById('promptEditor').value = DEFAULT_PROMPT;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════════════
+const pageTitles = {
+  campaign: 'Campaign',
+  leads: 'Leads',
+  outcomes: 'Outcomes',
+  demo: 'Demo — Talk to the Agent',
+  prompt: 'Prompt Editor',
+  settings: 'Settings'
+};
+
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  document.getElementById('nav-' + id).classList.add('active');
+  document.getElementById('pageTitle').textContent = pageTitles[id];
+  if (id === 'outcomes') renderOutcomes();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════════════════════════
+function saveSettings() {
+  config = {
+    ...config,
+    vapiKey: document.getElementById('vapiKey').value.trim(),
+    vapiAssistantId: document.getElementById('vapiAssistantId').value.trim(),
+    vapiPublicKey: document.getElementById('vapiPublicKey').value.trim(),
+    makeWebhookUrl: document.getElementById('makeWebhookUrl').value.trim(),
+    sheetId: document.getElementById('sheetId').value.trim(),
+    sheetsApiKey: document.getElementById('sheetsApiKey').value.trim(),
+    transferNumber: document.getElementById('transferNumber').value.trim(),
+  };
+  localStorage.setItem('moorgate_config', JSON.stringify(config));
+  updateConnectionStatus();
+  toast('Settings saved', 'success');
+}
+
+function saveCallSettings() {
+  config = {
+    ...config,
+    callStart: document.getElementById('callStart').value,
+    callEnd: document.getElementById('callEnd').value,
+    maxCalls: document.getElementById('maxCalls').value,
+  };
+  localStorage.setItem('moorgate_config', JSON.stringify(config));
+  toast('Call settings saved', 'success');
+}
+
+function toggleKey(id) {
+  const el = document.getElementById(id);
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+function updateConnectionStatus() {
+  const dot = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
+  if (config.vapiKey && config.vapiAssistantId) {
+    dot.className = 'status-dot live';
+    text.textContent = 'Connected';
+  } else {
+    dot.className = 'status-dot';
+    text.textContent = 'Not configured';
+  }
+}
+
+async function testConnection() {
+  if (!config.vapiKey) { toast('Enter your Vapi API key first', 'error'); return; }
+  toast('Testing Vapi connection...', 'info');
+  try {
+    const res = await fetch(`https://api.vapi.ai/assistant/${config.vapiAssistantId}`, {
+      headers: { 'Authorization': `Bearer ${config.vapiKey}` }
+    });
+    if (res.ok) {
+      toast('✓ Vapi connected successfully', 'success');
+      document.getElementById('statusDot').className = 'status-dot live';
+      document.getElementById('statusText').textContent = 'Connected';
+    } else {
+      toast('Vapi connection failed: ' + res.status, 'error');
+    }
+  } catch (e) {
+    toast('Connection error — check key and CORS proxy', 'error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LEADS
+// ═══════════════════════════════════════════════════════════════
+async function loadLeads() {
+  if (!config.sheetId || !config.sheetsApiKey) {
+    // Use demo data
+    leads = getDemoLeads();
+    renderLeadsTable(leads);
+    updateStats();
+    return;
+  }
+  try {
+    const range = 'Sheet1!A1:P200';
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${range}?key=${config.sheetsApiKey}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.values && data.values.length > 1) {
+      const headers = data.values[0];
+      leads = data.values.slice(1).map((row, i) => {
+        const obj = { _row: i + 2 };
+        headers.forEach((h, j) => { obj[h] = row[j] || ''; });
+        return obj;
+      });
+      toast(`Loaded ${leads.length} leads from Google Sheets`, 'success');
+    } else {
+      leads = [];
+    }
+    renderLeadsTable(leads);
+    updateStats();
+  } catch (e) {
+    leads = getDemoLeads();
+    renderLeadsTable(leads);
+    updateStats();
+    toast('Could not reach Sheets API — showing demo data', 'info');
+  }
+}
+
+function getDemoLeads() {
+  return [
+    { first_name:'Sarah', last_name:'Mitchell', business_name:'Mitchell Haulage Ltd', phone_number:'+447712345678', source:'cold_list', status:'new', call_outcome_status:'', qualification_category:'', notes_short:'', email:'' },
+    { first_name:'James', last_name:'Crawford', business_name:'Crawford Plant Hire', phone_number:'+447798765432', source:'web', status:'called', call_outcome_status:'transferred', qualification_category:'asset_finance', notes_short:'Interested in excavator finance, transferred to AM.', email:'james@crawfordplant.co.uk' },
+    { first_name:'Priya', last_name:'Sharma', business_name:'Sharma Foods Ltd', phone_number:'+447634567890', source:'referral', status:'called', call_outcome_status:'callback_booked', qualification_category:'working_capital', notes_short:'Needs working capital support, callback Thu 2pm.', email:'' },
+    { first_name:'Tom', last_name:'Hughes', business_name:'Hughes Electrical', phone_number:'+447756789012', source:'cold_list', status:'called', call_outcome_status:'not_interested', qualification_category:'not_interested', notes_short:'No current funding need.', email:'' },
+    { first_name:'Lisa', last_name:'Patel', business_name:'Patel Retail Group', phone_number:'+447823456789', source:'broker', status:'new', call_outcome_status:'', qualification_category:'', notes_short:'', email:'lisa@patelretail.co.uk' },
+    { first_name:'David', last_name:'Wong', business_name:'Wong Logistics', phone_number:'+447867890123', source:'cold_list', status:'called', call_outcome_status:'voicemail_left', qualification_category:'voicemail', notes_short:'Voicemail left.', email:'' },
+  ];
+}
+
+function renderLeadsTable(data) {
+  const body = document.getElementById('leadsTableBody');
+  if (!data.length) {
+    body.innerHTML = '<tr><td colspan="8"><div class="empty"><div class="empty-icon">👥</div><div class="empty-text">No leads found.</div></div></td></tr>';
+    return;
+  }
+  body.innerHTML = data.map(l => `
+    <tr>
+      <td><strong>${l.first_name || ''} ${l.last_name || ''}</strong></td>
+      <td>${l.business_name || '<span class="text-muted">—</span>'}</td>
+      <td><span class="font-mono" style="font-size:12px">${l.phone_number || '—'}</span></td>
+      <td>${l.source ? `<span class="badge badge-dim">${l.source}</span>` : '—'}</td>
+      <td>${statusBadge(l.call_outcome_status || l.status)}</td>
+      <td>${l.qualification_category ? `<span class="badge badge-blue">${l.qualification_category.replace(/_/g,' ')}</span>` : '—'}</td>
+      <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; color:var(--text-muted)">${l.notes_short || '—'}</td>
+      <td>
+        <div style="display:flex; gap:4px;">
+          <button class="btn" style="padding:4px 8px; font-size:11px;" onclick='viewLead(${JSON.stringify(l).replace(/'/g,"&#39;")})'>View</button>
+          <button class="btn btn-gold" style="padding:4px 8px; font-size:11px;" onclick="callLead('${l.phone_number}','${l.first_name}')">Call</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function filterLeads() {
+  const val = document.getElementById('filterStatus').value;
+  if (!val) { renderLeadsTable(leads); return; }
+  const filtered = leads.filter(l => (l.call_outcome_status || l.status) === val);
+  renderLeadsTable(filtered);
+}
+
+function statusBadge(status) {
+  const map = {
+    'new': ['badge-dim', 'new'],
+    'qualified_hot': ['badge-green', '🔥 hot'],
+    'qualified_warm': ['badge-amber', '🌤 warm'],
+    'qualified_cold': ['badge-dim', 'cold'],
+    'transferred': ['badge-green', '✓ transferred'],
+    'callback_booked': ['badge-blue', '📅 callback'],
+    'not_interested': ['badge-red', 'not interested'],
+    'voicemail_left': ['badge-dim', 'voicemail'],
+    'no_answer': ['badge-dim', 'no answer'],
+    'do_not_call': ['badge-red', '⛔ DNC'],
+    'called': ['badge-blue', 'called'],
+    'wrong_contact': ['badge-dim', 'wrong contact'],
+    'incomplete': ['badge-dim', 'incomplete'],
+  };
+  const [cls, label] = map[status] || ['badge-dim', status || '—'];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+function viewLead(lead) {
+  document.getElementById('viewLeadTitle').textContent = `${lead.first_name || ''} ${lead.last_name || ''}`;
+  document.getElementById('viewLeadBody').innerHTML = `
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+      ${field('Business', lead.business_name)}
+      ${field('Phone', lead.phone_number)}
+      ${field('Email', lead.email || '—')}
+      ${field('Source', lead.source)}
+      ${field('Status', lead.call_outcome_status || lead.status)}
+      ${field('Category', lead.qualification_category)}
+      ${field('Intent', lead.intent_level)}
+      ${field('Callback', lead.callback_date ? `${lead.callback_date} ${lead.callback_time || ''}` : '—')}
+    </div>
+    ${lead.notes_short ? `<div style="margin-top:16px"><div class="form-label" style="margin-bottom:6px">Summary</div><div style="background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); padding:12px; font-size:13px; line-height:1.6; color:var(--text-muted)">${lead.notes_short}</div></div>` : ''}
+    ${lead.notes_detailed ? `<div style="margin-top:12px"><div class="form-label" style="margin-bottom:6px">Detailed Notes</div><div style="background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); padding:12px; font-size:13px; line-height:1.6; color:var(--text-muted)">${lead.notes_detailed}</div></div>` : ''}
+  `;
+  openModal('viewLeadModal');
+}
+
+function field(label, value) {
+  return `<div><div class="form-label" style="margin-bottom:4px">${label}</div><div style="font-size:13px; color:var(--text)">${value || '—'}</div></div>`;
+}
+
+async function addLead() {
+  const phone = document.getElementById('lead-phone').value.trim();
+  if (!phone) { toast('Phone number is required', 'error'); return; }
+  const lead = {
+    first_name: document.getElementById('lead-first').value.trim(),
+    last_name: document.getElementById('lead-last').value.trim(),
+    business_name: document.getElementById('lead-business').value.trim(),
+    phone_number: phone,
+    source: document.getElementById('lead-source').value,
+    email: document.getElementById('lead-email').value.trim(),
+    notes: document.getElementById('lead-notes').value.trim(),
+    status: 'new',
+  };
+
+  if (config.sheetId && config.sheetsApiKey) {
+    // In production this would go via your backend API route
+    toast('Lead added (configure backend to write to Sheets)', 'info');
+  }
+
+  leads.unshift(lead);
+  renderLeadsTable(leads);
+  updateStats();
+  closeModal('addLeadModal');
+  toast(`Lead added: ${lead.first_name} ${lead.last_name}`, 'success');
+
+  // Clear form
+  ['lead-first','lead-last','lead-business','lead-phone','lead-email','lead-notes'].forEach(id => document.getElementById(id).value = '');
+}
+
+async function callLead(phone, name) {
+  if (!config.vapiKey || !config.vapiAssistantId) {
+    toast('Configure Vapi credentials in Settings first', 'error');
+    return;
+  }
+  toast(`Initiating call to ${name || phone}...`, 'info');
+  try {
+    const res = await fetch('https://api.vapi.ai/call/phone', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${config.vapiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        assistantId: config.vapiAssistantId,
+        customer: { number: phone },
+        phoneNumberId: config.vapiPhoneNumberId,
+      })
+    });
+    if (res.ok) {
+      toast(`✓ Call placed to ${name || phone}`, 'success');
+      addFeedItem('📞', name || phone, 'Call initiated', 'Calling now...');
+    } else {
+      const err = await res.json();
+      toast('Call failed: ' + (err.message || res.status), 'error');
+    }
+  } catch (e) {
+    toast('Call error: ' + e.message, 'error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CAMPAIGN
+// ═══════════════════════════════════════════════════════════════
+async function startCampaign() {
+  if (!config.makeWebhookUrl) {
+    toast('Configure Make.com webhook URL in Settings first', 'error');
+    showPage('settings');
+    return;
+  }
+  campaignRunning = true;
+  document.getElementById('startBtn').style.display = 'none';
+  document.getElementById('stopBtn').style.display = 'flex';
+  document.getElementById('campaignStatusMsg').textContent = 'Campaign running...';
+
+  try {
+    const res = await fetch(config.makeWebhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trigger: 'start', timestamp: new Date().toISOString() })
+    });
+    if (res.ok) {
+      toast('✓ Campaign started — Make.com is processing leads', 'success');
+      addFeedItem('🚀', 'Campaign', 'Started', 'Make.com webhook triggered successfully');
+      simulateLiveFeed();
+    } else {
+      toast('Webhook error: ' + res.status, 'error');
+      resetCampaignBtn();
+    }
+  } catch (e) {
+    toast('Could not reach Make.com webhook', 'error');
+    resetCampaignBtn();
+  }
+}
+
+function stopCampaign() {
+  campaignRunning = false;
+  resetCampaignBtn();
+  toast('Campaign stopped', 'info');
+  addFeedItem('⏹', 'Campaign', 'Stopped', 'Campaign halted by operator');
+}
+
+function resetCampaignBtn() {
+  document.getElementById('startBtn').style.display = 'flex';
+  document.getElementById('stopBtn').style.display = 'none';
+  document.getElementById('campaignStatusMsg').textContent = 'Ready to launch';
+  campaignRunning = false;
+}
+
+function simulateLiveFeed() {
+  if (!campaignRunning) return;
+  const events = [
+    ['📞', 'Sarah Mitchell', 'Mitchell Haulage Ltd', 'Dialling...'],
+    ['🔔', 'Sarah Mitchell', 'Mitchell Haulage Ltd', 'Call answered'],
+    ['💬', 'Sarah Mitchell', 'Mitchell Haulage Ltd', 'Qualifying: asset finance interest detected'],
+    ['🔥', 'Sarah Mitchell', 'Mitchell Haulage Ltd', 'Hot lead — transferring to account manager'],
+    ['📞', 'David Wong', 'Wong Logistics', 'Dialling...'],
+    ['📩', 'David Wong', 'Wong Logistics', 'Voicemail left'],
+    ['📞', 'Lisa Patel', 'Patel Retail Group', 'Dialling...'],
+    ['💬', 'Lisa Patel', 'Patel Retail Group', 'Qualifying: invoice finance'],
+    ['📅', 'Lisa Patel', 'Patel Retail Group', 'Callback booked: Thursday 2pm'],
+  ];
+  let i = 0;
+  const interval = setInterval(() => {
+    if (!campaignRunning || i >= events.length) { clearInterval(interval); return; }
+    const [icon, name, biz, detail] = events[i];
+    addFeedItem(icon, name, biz, detail);
+    i++;
+  }, 2200);
+}
+
+function addFeedItem(icon, name, biz, detail) {
+  const feed = document.getElementById('liveFeed');
+  const empty = feed.querySelector('.empty');
+  if (empty) empty.remove();
+
+  const now = new Date();
+  const time = now.toTimeString().slice(0,5);
+  const item = document.createElement('div');
+  item.className = 'feed-item';
+  item.innerHTML = `
+    <div class="feed-icon">${icon}</div>
+    <div class="feed-body">
+      <div class="feed-name">${name} <span style="color:var(--text-muted); font-weight:400">· ${biz}</span></div>
+      <div class="feed-detail">${detail}</div>
+    </div>
+    <div class="feed-time">${time}</div>
+  `;
+  feed.insertBefore(item, feed.firstChild);
+  feedItems.unshift({ icon, name, biz, detail, time });
+  if (feed.children.length > 30) feed.removeChild(feed.lastChild);
+}
+
+function clearFeed() {
+  document.getElementById('liveFeed').innerHTML = '<div class="empty"><div class="empty-icon">📞</div><div class="empty-text">Feed cleared.</div></div>';
+  feedItems = [];
+}
+
+// ═══════════════════════════════════════════════════════════════
+// OUTCOMES
+// ═══════════════════════════════════════════════════════════════
+function renderOutcomes() {
+  const called = leads.filter(l => l.call_outcome_status);
+  const transferred = called.filter(l => l.call_outcome_status === 'transferred').length;
+  const callbacks = called.filter(l => l.call_outcome_status === 'callback_booked').length;
+  const total = called.length || 1;
+
+  const transferRate = Math.round(transferred / total * 100);
+  const qualifiedRate = Math.round(called.filter(l => ['transferred','callback_booked','qualified_hot','qualified_warm'].includes(l.call_outcome_status)).length / total * 100);
+
+  document.getElementById('o-transfer-rate').textContent = transferRate + '%';
+  document.getElementById('o-qualified-rate').textContent = qualifiedRate + '%';
+  document.getElementById('o-avg-duration').textContent = '142s';
+  document.getElementById('o-missed').textContent = '2';
+
+  document.getElementById('bar-transfer').style.width = transferRate + '%';
+  document.getElementById('bar-qualified').style.width = qualifiedRate + '%';
+
+  // Outcome breakdown
+  const statusCounts = {};
+  called.forEach(l => {
+    const s = l.call_outcome_status || 'unknown';
+    statusCounts[s] = (statusCounts[s] || 0) + 1;
+  });
+  document.getElementById('outcomeBreakdown').innerHTML = Object.entries(statusCounts).length ?
+    Object.entries(statusCounts).map(([k, v]) => `
+      <div style="display:flex; align-items:center; gap:10px;">
+        ${statusBadge(k)}
+        <div style="flex:1; background:var(--surface2); height:4px; border-radius:2px; overflow:hidden;">
+          <div style="height:100%; background:var(--gold); width:${Math.round(v/total*100)}%"></div>
+        </div>
+        <span class="font-mono" style="font-size:11px; color:var(--text-muted); min-width:20px; text-align:right">${v}</span>
+      </div>
+    `).join('') :
+    '<div class="empty"><div class="empty-text">No data yet.</div></div>';
+
+  // Category breakdown
+  const catCounts = {};
+  called.forEach(l => {
+    if (l.qualification_category) catCounts[l.qualification_category] = (catCounts[l.qualification_category] || 0) + 1;
+  });
+  document.getElementById('categoryBreakdown').innerHTML = Object.entries(catCounts).length ?
+    Object.entries(catCounts).map(([k, v]) => `
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="badge badge-blue" style="min-width:110px; justify-content:center">${k.replace(/_/g,' ')}</span>
+        <div style="flex:1; background:var(--surface2); height:4px; border-radius:2px; overflow:hidden;">
+          <div style="height:100%; background:var(--blue); width:${Math.round(v/total*100)}%"></div>
+        </div>
+        <span class="font-mono" style="font-size:11px; color:var(--text-muted); min-width:20px; text-align:right">${v}</span>
+      </div>
+    `).join('') :
+    '<div class="empty"><div class="empty-text">No data yet.</div></div>';
+
+  // Table
+  const tbody = document.getElementById('outcomesTableBody');
+  const outcomeCalls = called.slice(0, 30);
+  if (outcomeCalls.length) {
+    tbody.innerHTML = outcomeCalls.map(l => `
+      <tr>
+        <td><strong>${l.first_name || ''} ${l.last_name || ''}</strong></td>
+        <td>${l.business_name || '—'}</td>
+        <td>${statusBadge(l.call_outcome_status)}</td>
+        <td>${l.qualification_category ? `<span class="badge badge-blue">${l.qualification_category.replace(/_/g,' ')}</span>` : '—'}</td>
+        <td>${l.intent_level ? `<span class="badge ${l.intent_level==='high'?'badge-green':l.intent_level==='medium'?'badge-amber':'badge-dim'}">${l.intent_level}</span>` : '—'}</td>
+        <td><span class="font-mono" style="font-size:11px">${l.call_duration || '—'}</span></td>
+        <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; color:var(--text-muted)">${l.notes_short || '—'}</td>
+        <td style="font-size:12px; color:var(--text-muted)">${l.next_action || '—'}</td>
+      </tr>
+    `).join('');
+  } else {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty"><div class="empty-icon">📊</div><div class="empty-text">No outcomes yet.</div></div></td></tr>';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STATS
+// ═══════════════════════════════════════════════════════════════
+function updateStats() {
+  const total = leads.length;
+  const transferred = leads.filter(l => l.call_outcome_status === 'transferred').length;
+  const callbacks = leads.filter(l => l.call_outcome_status === 'callback_booked').length;
+  const called = leads.filter(l => l.call_outcome_status).length;
+  const rate = called ? Math.round(transferred / called * 100) + '%' : '—';
+  const pending = leads.filter(l => !l.status || l.status === 'new').length;
+
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-transferred').textContent = transferred;
+  document.getElementById('stat-callbacks').textContent = callbacks;
+  document.getElementById('stat-rate').textContent = rate;
+  document.getElementById('pendingCount').textContent = pending;
+  document.getElementById('calledToday').textContent = called;
+  document.getElementById('avgDuration').textContent = called ? '142s' : '—';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PROMPT
+// ═══════════════════════════════════════════════════════════════
+function updatePromptCharCount() {
+  const len = document.getElementById('promptEditor').value.length;
+  document.getElementById('charCount').textContent = len.toLocaleString();
+}
+
+async function loadPrompt() {
+  if (!config.vapiKey || !config.vapiAssistantId) {
+    toast('Configure Vapi credentials in Settings first', 'error');
+    return;
+  }
+  toast('Loading prompt from Vapi...', 'info');
+  try {
+    const res = await fetch(`https://api.vapi.ai/assistant/${config.vapiAssistantId}`, {
+      headers: { 'Authorization': `Bearer ${config.vapiKey}` }
+    });
+    const data = await res.json();
+    const messages = data?.model?.messages || [];
+    const sys = messages.find(m => m.role === 'system');
+    if (sys) {
+      document.getElementById('promptEditor').value = sys.content;
+      updatePromptCharCount();
+      toast('Prompt loaded from Vapi', 'success');
+    } else {
+      toast('No system prompt found in assistant', 'info');
+    }
+  } catch (e) {
+    toast('Could not load prompt: ' + e.message, 'error');
+  }
+}
+
+async function savePrompt() {
+  if (!config.vapiKey || !config.vapiAssistantId) {
+    toast('Configure Vapi credentials in Settings first', 'error');
+    return;
+  }
+  const prompt = document.getElementById('promptEditor').value;
+  if (!prompt.trim()) { toast('Prompt is empty', 'error'); return; }
+
+  toast('Saving prompt to Vapi...', 'info');
+  try {
+    const res = await fetch(`https://api.vapi.ai/assistant/${config.vapiAssistantId}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${config.vapiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: {
+          messages: [{ role: 'system', content: prompt }]
+        }
+      })
+    });
+    if (res.ok) {
+      config.prompt = prompt;
+      localStorage.setItem('moorgate_config', JSON.stringify(config));
+      toast('✓ Prompt saved to Vapi assistant', 'success');
+    } else {
+      const err = await res.json();
+      toast('Save failed: ' + (err.message || res.status), 'error');
+    }
+  } catch (e) {
+    toast('Error saving prompt: ' + e.message, 'error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// REFRESH
+// ═══════════════════════════════════════════════════════════════
+function refreshData() {
+  loadLeads();
+  toast('Data refreshed', 'success');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MODALS
+// ═══════════════════════════════════════════════════════════════
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('modal-overlay')) {
+    e.target.classList.remove('open');
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// WEB CALL / DEMO
+// ═══════════════════════════════════════════════════════════════
+let vapiInstance = null;
+let webCallActive = false;
+let callTimerInterval = null;
+let callSeconds = 0;
+let volInterval = null;
+
+function getVapi() {
+  if (vapiInstance) return vapiInstance;
+  const pubKey = config.vapiPublicKey;
+  if (!pubKey) {
+    toast('Add your Vapi Public Key in Settings first', 'error');
+    showPage('settings');
+    return null;
+  }
+  try {
+    vapiInstance = new window.Vapi(pubKey);
+
+    vapiInstance.on('call-start', () => {
+      setDemoActive(true);
+      appendTranscript('Agent', 'Connecting...');
+      startCallTimer();
+      startVolAnimation();
+    });
+
+    vapiInstance.on('call-end', () => {
+      setDemoActive(false);
+      stopCallTimer();
+      stopVolAnimation();
+      appendTranscript('System', 'Call ended.');
+    });
+
+    vapiInstance.on('speech-start', () => {
+      document.getElementById('demoOrbLabel').textContent = 'Agent speaking...';
+    });
+
+    vapiInstance.on('speech-end', () => {
+      document.getElementById('demoOrbLabel').textContent = 'Listening...';
+    });
+
+    vapiInstance.on('message', (msg) => {
+      if (msg.type === 'transcript' && msg.transcriptType === 'final') {
+        appendTranscript(msg.role === 'assistant' ? 'Agent' : 'You', msg.transcript);
+      }
+    });
+
+    vapiInstance.on('error', (e) => {
+      toast('Call error: ' + (e.message || 'unknown'), 'error');
+      setDemoActive(false);
+      stopCallTimer();
+      stopVolAnimation();
+    });
+
+  } catch(e) {
+    toast('Could not initialise Vapi Web SDK: ' + e.message, 'error');
+    return null;
+  }
+  return vapiInstance;
+}
+
+function toggleWebCall() {
+  if (webCallActive) { endWebCall(); return; }
+  startWebCall();
+}
+
+function startWebCall() {
+  if (!config.vapiAssistantId) {
+    toast('Add your Vapi Assistant ID in Settings first', 'error');
+    showPage('settings');
+    return;
+  }
+  const vapi = getVapi();
+  if (!vapi) return;
+  document.getElementById('demoTranscript').textContent = 'Connecting to agent...';
+  try {
+    vapi.start(config.vapiAssistantId);
+  } catch(e) {
+    toast('Failed to start call: ' + e.message, 'error');
+  }
+}
+
+function endWebCall() {
+  if (vapiInstance) {
+    try { vapiInstance.stop(); } catch(e) {}
+  }
+  setDemoActive(false);
+  stopCallTimer();
+  stopVolAnimation();
+}
+
+function setDemoActive(active) {
+  webCallActive = active;
+  const orb = document.getElementById('demoOrb');
+  const label = document.getElementById('demoOrbLabel');
+  const endBtn = document.getElementById('demoEndBtn');
+  if (active) {
+    orb.classList.add('active');
+    orb.textContent = '🎙';
+    label.textContent = 'Connected';
+    label.classList.add('active');
+    endBtn.style.display = 'flex';
+  } else {
+    orb.classList.remove('active');
+    orb.textContent = '🎙';
+    label.textContent = 'Click to start';
+    label.classList.remove('active');
+    endBtn.style.display = 'none';
+    callSeconds = 0;
+    document.getElementById('demoCallTimer').textContent = '00:00';
+  }
+}
+
+function appendTranscript(speaker, text) {
+  const el = document.getElementById('demoTranscript');
+  if (el.textContent === 'Waiting to connect...' || el.textContent === 'Connecting to agent...') {
+    el.textContent = '';
+  }
+  el.textContent += (el.textContent ? '\n' : '') + speaker + ': ' + text;
+  el.scrollTop = el.scrollHeight;
+}
+
+function startCallTimer() {
+  callSeconds = 0;
+  callTimerInterval = setInterval(() => {
+    callSeconds++;
+    const m = String(Math.floor(callSeconds/60)).padStart(2,'0');
+    const s = String(callSeconds%60).padStart(2,'0');
+    document.getElementById('demoCallTimer').textContent = m + ':' + s;
+  }, 1000);
+}
+
+function stopCallTimer() {
+  clearInterval(callTimerInterval);
+}
+
+function startVolAnimation() {
+  const bars = document.querySelectorAll('.vol-bar');
+  volInterval = setInterval(() => {
+    if (!webCallActive) return;
+    bars.forEach(b => {
+      b.style.height = (Math.random() * 16 + 2) + 'px';
+    });
+  }, 120);
+}
+
+function stopVolAnimation() {
+  clearInterval(volInterval);
+  document.querySelectorAll('.vol-bar').forEach(b => b.style.height = '3px');
+}
+
+function setScenario(type) {
+  const hints = {
+    hot: 'Try saying: "Yes I need asset finance for a new van, about £40,000, within the next two weeks"',
+    warm: 'Try saying: "Maybe later in the year, we might need some working capital"',
+    busy: 'Try saying: "I\'m in a meeting right now, can someone call me back Thursday afternoon?"',
+    cold: 'Try saying: "No thanks, we don\'t need any finance at the moment"',
+    broker: 'Try saying: "We already work with a broker actually"',
+  };
+  toast(hints[type] || '', 'info');
+}
+// ═══════════════════════════════════════════════════════════════
+
+
+function toast(message, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  const icons = { success: '✓', error: '✕', info: 'ℹ' };
+  el.innerHTML = `<span>${icons[type] || 'ℹ'}</span><span>${message}</span>`;
+  container.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 300); }, 3500);
+}
+</script>
+</body>
+</html>
